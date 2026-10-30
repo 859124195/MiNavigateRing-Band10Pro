@@ -38,25 +38,38 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: 设置 Node.js 20（构建手环 RPK）
+      - name: 设置 Node.js 24（构建手环 RPK）
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
 
       - name: 设置 Python 3（生成证书脚本依赖）
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
 
-      - name: 安装 Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: 安装 SDK 平台与构建工具（compileSdk 37 / AGP 9.4.1）
+      # 不使用第三方 setup-android action（已在 Node 24 runner 上失效），
+      # 改为手动下载安装 command-line tools，路径稳定且可控。
+      - name: 安装 Android SDK（compileSdk 37 / AGP 9.4.1）
         run: |
-          export ANDROID_HOME="$ANDROID_HOME"
+          export ANDROID_HOME="$HOME/android-sdk"
+          mkdir -p "$ANDROID_HOME/cmdline-tools"
+          curl -sS -m 150 -o cmdtools.zip "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
+          python3 - <<'PY'
+          import zipfile, os
+          z = zipfile.ZipFile("cmdtools.zip")
+          z.extractall(os.path.join(os.environ["ANDROID_HOME"], "cmdline-tools"))
+          base = os.path.join(os.environ["ANDROID_HOME"], "cmdline-tools")
+          src = os.path.join(base, "cmdline-tools")
+          dst = os.path.join(base, "latest")
+          if os.path.isdir(src) and not os.path.isdir(dst):
+              os.rename(src, dst)
+          PY
           export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
           yes | sdkmanager --licenses
           sdkmanager "platforms;android-37" "build-tools;35.0.0"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          rm -f cmdtools.zip
 
       - name: 缓存 Gradle 依赖
         uses: actions/cache@v4
