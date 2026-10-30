@@ -50,9 +50,12 @@ jobs:
 
       # 不使用第三方 setup-android action（已在 Node 24 runner 上失效），
       # 改为手动下载安装 command-line tools，路径稳定且可控。
+      # 注意：python zipfile 解压不保留可执行位，需手动 chmod +x；
+      # 且只把 ANDROID_HOME 写入 GITHUB_ENV（写整个 PATH 会覆盖 node/python 的 PATH）。
       - name: 安装 Android SDK（compileSdk 37 / AGP 9.4.1）
         run: |
           export ANDROID_HOME="$HOME/android-sdk"
+          export JAVA_BIN="$JAVA_HOME/bin"
           mkdir -p "$ANDROID_HOME/cmdline-tools"
           curl -sS -m 150 -o cmdtools.zip "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
           python3 - <<'PY'
@@ -65,7 +68,8 @@ jobs:
           if os.path.isdir(src) and not os.path.isdir(dst):
               os.rename(src, dst)
           PY
-          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+          chmod +x "$ANDROID_HOME/cmdline-tools/latest/bin/"*
+          export PATH="$JAVA_BIN:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
           yes | sdkmanager --licenses
           sdkmanager "platforms;android-37" "build-tools;35.0.0"
           echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
