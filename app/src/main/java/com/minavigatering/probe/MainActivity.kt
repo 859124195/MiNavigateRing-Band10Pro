@@ -37,6 +37,7 @@ import com.minavigatering.probe.protocol.NavProtocol
 import com.minavigatering.probe.protocol.StateMessage
 import com.minavigatering.probe.transport.ProbeActions
 import com.minavigatering.probe.transport.ProbeForegroundService
+import com.minavigatering.probe.logging.LogStore
 import com.minavigatering.probe.transport.ProbeRuntime
 import com.minavigatering.probe.transport.SendPhase
 import com.minavigatering.probe.transport.SendResult
@@ -53,6 +54,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 持久化运行日志：App 启动即初始化并接管时间线 sink，UI 阶段产生的事件也会落盘。
+        LogStore.init(applicationContext)
+        LogStore.installTimelineSink()
         // One transport per process, shared with the foreground service so both use the
         // same refreshed node and the same inbound listener registration.
         val transport = ProbeRuntime.transport(applicationContext)

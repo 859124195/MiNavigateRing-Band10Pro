@@ -3,6 +3,7 @@ package com.minavigatering.probe.transport
 import android.content.Context
 import android.os.SystemClock
 import android.util.Log
+import com.minavigatering.probe.logging.LogStore
 import com.minavigatering.probe.navigation.NavigationSettings
 import com.xiaomi.xms.wearable.Wearable
 import java.util.concurrent.atomic.AtomicInteger
@@ -126,6 +127,7 @@ object WearAutoLaunch {
     /** One line per outcome, logged and mirrored into the settings snapshot. */
     private fun record(context: Context, line: String) {
         Log.i(TAG, line)
+        LogStore.i(TAG, "自动拉起: $line")
         val settings = NavigationSettings(context)
         settings.lastAutoLaunchText = line
         settings.lastAutoLaunchAtMs = System.currentTimeMillis()

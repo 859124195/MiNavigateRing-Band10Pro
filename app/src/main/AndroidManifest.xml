@@ -56,6 +56,17 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+
+        <!-- 运行日志分享：把应用私有文件 probelog.txt 通过系统分享面板发出。 -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="com.minavigatering.probe.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/log_paths" />
+        </provider>
     </application>
 
 </manifest>

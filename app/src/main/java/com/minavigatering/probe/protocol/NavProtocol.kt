@@ -13,6 +13,7 @@ object NavProtocol {
 
     const val KIND_STATE = "state"
     const val KIND_ACK = "ack"
+    const val KIND_BAND_STATUS = "bandstatus"
 
     const val LINK_CONNECTED = "connected"
     const val LINK_CONNECTING = "connecting"
@@ -61,7 +62,7 @@ object NavProtocol {
 
     val ALLOWED_LINKS: List<String> = listOf(LINK_CONNECTED, LINK_CONNECTING, LINK_DISCONNECTED)
     val ALLOWED_STATUSES: List<String> = listOf(STATUS_IDLE, STATUS_ACTIVE, STATUS_UNRECOGNIZED, STATUS_ENDED)
-    val ALLOWED_KINDS: List<String> = listOf(KIND_STATE, KIND_ACK)
+    val ALLOWED_KINDS: List<String> = listOf(KIND_STATE, KIND_ACK, KIND_BAND_STATUS)
 
     fun isAllowedAction(action: String?): Boolean = action == null || action in ALLOWED_ACTIONS
 }
@@ -104,6 +105,31 @@ data class AckMessage(
     override val sentAtMs: Long,
 ) : Message
 
+/**
+ * 手环周期性回传的"自身显示状态"，用于手机端日志直接判断手环到底渲染了什么
+ * （例如黑屏时，title 是"连接中"还是"异常初始化"、是否真的拿到了距离/路名）。
+ *
+ * 它不参与指令回执逻辑：手机侧解码后仅供记录，不会触发 ACK 计数。
+ */
+data class BandStatusMessage(
+    override val v: Int = NavProtocol.VERSION,
+    override val kind: String = NavProtocol.KIND_BAND_STATUS,
+    override val id: String,
+    override val sentAtMs: Long,
+    /** 手环当前显示的标题文字（如"连接中"/"左转"/"异常初始化"）。 */
+    val title: String = "",
+    /** 手环是否正在显示距离数字。 */
+    val hasDistance: Boolean = false,
+    /** 手环是否正在显示路名。 */
+    val roadVisible: Boolean = false,
+    /** 诊断状态行（ready/diag/入帧/链路）。 */
+    val diagStatus: String = "",
+    /** 页面生命周期计数（init/ready/show/tick）。 */
+    val lifeText: String = "",
+    /** 页面渲染过程中捕获到的错误，空字符串表示无错误。 */
+    val error: String = "",
+) : Message
+
 /** UTF-8 JSON codec. Round-trips every field listed above. */
 object NavCodec {
 
@@ -137,6 +163,21 @@ object NavCodec {
                 "sentAtMs" to message.sentAtMs,
             )
         )
+
+        is BandStatusMessage -> Json.obj(
+            listOf(
+                "v" to message.v,
+                "kind" to message.kind,
+                "id" to message.id,
+                "sentAtMs" to message.sentAtMs,
+                "title" to message.title,
+                "hasDistance" to message.hasDistance,
+                "roadVisible" to message.roadVisible,
+                "diagStatus" to message.diagStatus,
+                "lifeText" to message.lifeText,
+                "error" to message.error,
+            )
+        )
     }
 
     fun decode(bytes: ByteArray): Message = decodeFromString(String(bytes, Charsets.UTF_8))
@@ -149,6 +190,7 @@ object NavCodec {
         return when (kind) {
             NavProtocol.KIND_STATE -> decodeState(root)
             NavProtocol.KIND_ACK -> decodeAck(root)
+            NavProtocol.KIND_BAND_STATUS -> decodeBandStatus(root)
             else -> throw IllegalArgumentException("unsupported kind '$kind'")
         }
     }
@@ -190,6 +232,23 @@ object NavCodec {
             id = id,
             refId = refId,
             sentAtMs = sentAtMs,
+        )
+    }
+
+    private fun decodeBandStatus(root: Map<String, Any?>): BandStatusMessage {
+        val id = Json.asString(root["id"]) ?: throw IllegalArgumentException("bandstatus.id missing")
+        val sentAtMs = Json.asLong(root["sentAtMs"])
+            ?: throw IllegalArgumentException("bandstatus.sentAtMs missing")
+        return BandStatusMessage(
+            v = Json.asInt(root["v"]) ?: NavProtocol.VERSION,
+            id = id,
+            sentAtMs = sentAtMs,
+            title = Json.asString(root["title"]) ?: "",
+            hasDistance = Json.asBoolean(root["hasDistance"]) ?: false,
+            roadVisible = Json.asBoolean(root["roadVisible"]) ?: false,
+            diagStatus = Json.asString(root["diagStatus"]) ?: "",
+            lifeText = Json.asString(root["lifeText"]) ?: "",
+            error = Json.asString(root["error"]) ?: "",
         )
     }
 }

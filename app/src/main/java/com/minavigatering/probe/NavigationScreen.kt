@@ -103,8 +103,14 @@ private fun contentActions(
 /** The diagnostics page and its "返回导航" branch, unchanged from the previous main page. */
 @Composable
 private fun DebugPage(transport: XiaomiWearableTransport, onBack: () -> Unit) {
+    var showLog by remember { mutableStateOf(false) }
+    if (showLog) {
+        LogScreen(onBack = { showLog = false })
+        return
+    }
     Column(Modifier.safeDrawingPadding()) {
         Button(onClick = onBack) { Text("返回导航") }
+        Button(onClick = { showLog = true }) { Text("运行日志（持久化·可分享）") }
         ProbeScreen(transport)
     }
 }

@@ -2,6 +2,8 @@ package com.minavigatering.probe.transport
 
 import android.content.Context
 import android.util.Log
+import com.minavigatering.probe.logging.LogStore
+import com.minavigatering.probe.protocol.BandStatusMessage
 import com.minavigatering.probe.protocol.Message
 import com.minavigatering.probe.protocol.NavCodec
 import com.minavigatering.probe.protocol.NavProtocol
@@ -102,6 +104,15 @@ class XiaomiWearableTransport(private val context: Context) {
             Log.w(TAG, "inbound payload from $receivedNodeId could not be decoded: ${t.message}")
             return@OnMessageReceivedListener
         }
+        // 手环周期性回传的自身显示状态：单独记日志，不进入指令回执逻辑。
+        if (decoded is BandStatusMessage) {
+            val status =
+                "title=${decoded.title} 距离=${if (decoded.hasDistance) "有" else "无"} " +
+                    "路名=${if (decoded.roadVisible) "有" else "无"} diag=${decoded.diagStatus} " +
+                    "生命周期=${decoded.lifeText}${if (decoded.error.isNullOrBlank()) "" else " 错误=${decoded.error}"}"
+            LogStore.i(TAG, "手环状态: $status")
+            return@OnMessageReceivedListener
+        }
         handler(decoded)
     }
 
@@ -127,11 +138,14 @@ class XiaomiWearableTransport(private val context: Context) {
     private fun recordFailure(error: Throwable?) {
         val simpleName = error?.javaClass?.simpleName ?: "未知异常"
         diagnostics?.onSdkError(simpleName, error?.message)
+        LogStore.w(TAG, "SDK失败: $simpleName ${error?.message ?: ""}")
     }
 
     /** Mirrors one SDK failure into the permission line as well. */
     private fun recordPermissionFailure(error: Throwable?) {
-        diagnostics?.onPermissionStatus("权限探测失败：${error?.javaClass?.simpleName ?: "未知异常"}")
+        val simpleName = error?.javaClass?.simpleName ?: "未知异常"
+        diagnostics?.onPermissionStatus("权限探测失败：$simpleName")
+        LogStore.w(TAG, "权限探测失败: $simpleName ${error?.message ?: ""}")
     }
 
     /** Refreshes the reachable node list asynchronously; the callback gets the first node. */
@@ -144,20 +158,22 @@ class XiaomiWearableTransport(private val context: Context) {
                     nodeId = resolved
                     val name = first?.name
                     val namePart = if (name.isNullOrBlank()) "" else " name=$name"
-                    diagnostics?.onNodeStatus(
-                        if (resolved.isNullOrBlank()) {
-                            "节点 id 为空（无可发送节点）$namePart"
-                        } else {
-                            "节点 id 非空$namePart"
-                        }
-                    )
+                    val nodeLine = if (resolved.isNullOrBlank()) {
+                        "节点 id 为空（无可发送节点）$namePart"
+                    } else {
+                        "节点 id 非空$namePart"
+                    }
+                    diagnostics?.onNodeStatus(nodeLine)
+                    LogStore.i(TAG, "节点: $nodeLine")
                     onResult(resolved)
                 }
                 .addOnFailureListener { error ->
                     Log.w(TAG, "getConnectedNodes failed: ${error.message}")
                     nodeId = null
                     recordFailure(error)
-                    diagnostics?.onNodeStatus("节点获取失败：${error.javaClass.simpleName}")
+                    val nodeLine = "节点获取失败：${error.javaClass.simpleName}"
+                    diagnostics?.onNodeStatus(nodeLine)
+                    LogStore.w(TAG, "节点: $nodeLine")
                     onResult(null)
                 }
         } catch (t: Throwable) {
@@ -244,22 +260,24 @@ class XiaomiWearableTransport(private val context: Context) {
             authApi.checkPermission(target, Permission.DEVICE_MANAGER)
                 .addOnSuccessListener { granted ->
                     val value = granted ?: false
-                    diagnostics?.onPermissionStatus(
-                        if (value) "设备管理权限：已授予" else "设备管理权限：未授予"
-                    )
-                    onResult(value, if (value) "设备管理权限：已授予" else "设备管理权限：未授予")
+                    val text = if (value) "设备管理权限：已授予" else "设备管理权限：未授予"
+                    diagnostics?.onPermissionStatus(text)
+                    LogStore.i(TAG, "权限检查: $text")
+                    onResult(value, text)
                 }
                 .addOnFailureListener { error ->
                     Log.w(TAG, "checkPermission failed: ${error.message}")
                     recordFailure(error)
                     recordPermissionFailure(error)
-                    onResult(null, "权限检查失败：${error.javaClass.simpleName}")
+                    val text = "权限检查失败：${error.javaClass.simpleName}"
+                    onResult(null, text)
                 }
         } catch (t: Throwable) {
             Log.w(TAG, "checkPermission threw: ${t.message}")
             recordFailure(t)
             recordPermissionFailure(t)
-            onResult(null, "权限检查抛出：${t.javaClass.simpleName}")
+            val text = "权限检查抛出：${t.javaClass.simpleName}"
+            onResult(null, text)
         }
     }
 
@@ -281,22 +299,26 @@ class XiaomiWearableTransport(private val context: Context) {
             authApi.requestPermission(target, Permission.DEVICE_MANAGER)
                 .addOnSuccessListener { granted ->
                     val value = granted != null && granted.isNotEmpty()
-                    diagnostics?.onPermissionStatus(
-                        if (value) "设备管理权限：已授予" else "设备管理权限：未授予"
-                    )
-                    onResult(value, if (value) "设备管理权限：已授予" else "设备管理权限：未授予")
+                    val text = if (value) "设备管理权限：已授予" else "设备管理权限：未授予"
+                    diagnostics?.onPermissionStatus(text)
+                    LogStore.i(TAG, "权限请求结果: $text")
+                    onResult(value, text)
                 }
                 .addOnFailureListener { error ->
                     Log.w(TAG, "permission request failed: ${error.message}")
                     recordFailure(error)
                     recordPermissionFailure(error)
-                    onResult(false, "权限请求失败：${error.javaClass.simpleName}")
+                    val text = "权限请求失败：${error.javaClass.simpleName}"
+                    LogStore.w(TAG, "权限请求: $text")
+                    onResult(false, text)
                 }
         } catch (t: Throwable) {
             Log.w(TAG, "permission request threw: ${t.message}")
             recordFailure(t)
             recordPermissionFailure(t)
-            onResult(false, "权限请求抛出：${t.javaClass.simpleName}")
+            val text = "权限请求抛出：${t.javaClass.simpleName}"
+            LogStore.w(TAG, "权限请求: $text")
+            onResult(false, text)
         }
     }
 
@@ -370,6 +392,7 @@ class XiaomiWearableTransport(private val context: Context) {
                 .addOnFailureListener { error ->
                     val reason = error.message ?: "task failed"
                     Log.w(TAG, "sendMessage failed: $reason")
+                    LogStore.w(TAG, "发送失败: id=${message.id} reason=$reason")
                     onPhase(SendPhase.TaskFailed(message.id, reason))
                 }
             SendResult.Queued(target, message.id)

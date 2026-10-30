@@ -14,6 +14,7 @@ import android.os.IBinder
 import android.os.PowerManager
 import android.os.SystemClock
 import android.util.Log
+import com.minavigatering.probe.logging.LogStore
 import com.minavigatering.probe.protocol.NavCodec
 import com.minavigatering.probe.protocol.NavProtocol
 import com.minavigatering.probe.protocol.StateMessage
@@ -105,7 +106,8 @@ class ProbeForegroundService : Service() {
     override fun onCreate() {
         super.onCreate()
         createChannel()
-        installTimelineObserver()
+        LogStore.init(applicationContext)
+        LogStore.installTimelineSink()
         registerSystemEventReceiver()
     }
 
@@ -201,7 +203,10 @@ class ProbeForegroundService : Service() {
                             when (phase) {
                                 is SendPhase.Queued -> session.onQueued(phase.messageId, phase.nodeId)
                                 is SendPhase.TaskSucceeded -> session.onTaskSuccess(phase.messageId)
-                                is SendPhase.TaskFailed -> session.onTaskFailure(phase.messageId, phase.reason)
+                                is SendPhase.TaskFailed -> {
+                                    session.onTaskFailure(phase.messageId, phase.reason)
+                                    LogStore.w("MiRingService", "发送任务失败 id=${phase.messageId} reason=${phase.reason}")
+                                }
                             }
                         }
                     }
@@ -235,6 +240,7 @@ class ProbeForegroundService : Service() {
                             is SendPhase.TaskFailed ->
                                 session.onTaskFailure(phase.messageId, phase.reason).also {
                                     Log.w("MiRingService", "heartbeat Task failed id=${phase.messageId}")
+                                    LogStore.w("MiRingService", "心跳任务失败 id=${phase.messageId} reason=${phase.reason}")
                                 }
                         }
                     }
@@ -275,14 +281,13 @@ class ProbeForegroundService : Service() {
     }
 
     /**
-     * Installs the de-identified log sink on the process-wide timeline. The sink is
-     * re-installed with the identical lambda on purpose: several components record into the
-     * one shared timeline, and this keeps `Log.i MiRingTimeline` alive regardless of order.
+     * Installs the de-identified log sink on the process-wide timeline. Now also mirrored to
+     * the persistent [LogStore] (see LogStore.installTimelineSink), so a process restart no
+     * longer loses the timeline. Kept as a thin compatibility shim; the live sink is the
+     * LogStore one installed in onCreate.
      */
     private fun installTimelineObserver() {
-        RuntimeTimeline.shared.setObserver { entry ->
-            Log.i(TIMELINE_TAG, "${entry.event} ${entry.detail}")
-        }
+        LogStore.installTimelineSink()
     }
 
     /** Registers the screen/idle/power-save receiver, not exported to any other app on API 33+. */

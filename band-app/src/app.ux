@@ -80,6 +80,9 @@ export default {
       const interconnect = require("@system.interconnect");
       const vibrator = require("@system.vibrator");
       const connect = interconnect.instance();
+      // 页面需要回传"自身显示状态"，但 connect 实例只在本 onCreate 作用域里创建，
+      // 所以把它挂到 app 导出对象上，页面用 this.$app.$def.connect 就能发消息。
+      this.connect = connect;
       // Register the four callbacks first: a diagnosis call that throws must
       // not leave onmessage unregistered.
       connect.onmessage = (event) => {
@@ -190,6 +193,19 @@ export default {
       // 宿主或模块不可用时不得抛出：不退回默认值，显式暴露初始化异常。
       this.navSession = null;
       this.navInit = "异常初始化";
+    }
+  },
+
+  // 页面回传"自身显示状态"用：把一段文本通过 interconnect 发给手机。任何失败都吞掉，
+  // 绝不影响导航渲染。connect 在 onCreate 里创建并挂到了 this.connect。
+  reportBandStatus(text) {
+    try {
+      const conn = this.connect;
+      if (conn && typeof conn.send === "function") {
+        conn.send({ data: text, success() {}, fail() {} });
+      }
+    } catch (err) {
+      // 回传失败不影响手环显示。
     }
   }
 };

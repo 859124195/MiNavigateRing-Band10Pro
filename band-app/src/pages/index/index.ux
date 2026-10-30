@@ -308,15 +308,60 @@ export default {
 
   tick() {
     const startMs = Date.now();
-    const shared = this.sharedSession();
-    if (shared === null) {
-      this.applyAbnormal();
-    } else {
-      this.applyDisplay(shared.tick(startMs));
+    let shared = null;
+    try {
+      shared = this.sharedSession();
+      if (shared === null) {
+        this.applyAbnormal();
+      } else {
+        this.applyDisplay(shared.tick(startMs));
+      }
+      // 渲染成功：清空上一次错误，避免陈旧错误一直挂在状态里。
+      this.lastError = "";
+    } catch (err) {
+      // 渲染出错也尽量保留可见信息，而不是整页黑掉。
+      const msg = err && err.message ? String(err.message) : String(err);
+      this.lastError = msg;
+      if (!this.title || this.title === "连接中") {
+        this.title = "渲染异常";
+      }
+      this.diagStatus = "tick出错:" + msg;
     }
     // Both paths are timed, and the optional GC is inside the measured span.
     this.maybeRunGC(startMs);
     this.finishTickPerf(startMs, shared);
+    this.maybeReportStatus(startMs);
+  },
+
+  // 每 5 次 tick（约 5 秒）把"手环自身显示状态"回传给手机，手机日志里就能直接看到手环
+  // 是"连接中"还是"异常初始化"、有没有距离/路名、渲染有无报错。这是诊断黑屏的关键回路。
+  maybeReportStatus(nowMs) {
+    this.statusTickCount = (this.statusTickCount || 0) + 1;
+    if (this.statusTickCount < 5) {
+      return;
+    }
+    this.statusTickCount = 0;
+    const def = this.$app && this.$app.$def;
+    if (!def || typeof def.reportBandStatus !== "function") {
+      return;
+    }
+    const payload = {
+      v: 1,
+      kind: "bandstatus",
+      id: "bs-" + nowMs,
+      sentAtMs: nowMs,
+      title: this.title || "",
+      hasDistance: !!this.hasDistance,
+      roadVisible: !!this.roadVisible,
+      diagStatus: this.diagStatus || "",
+      lifeText: this.lifeText || "",
+      error: this.lastError || ""
+    };
+    try {
+      def.reportBandStatus(JSON.stringify(payload));
+    } catch (err) {
+      // 回传失败不影响手环显示。
+    }
   },
 
   // Every projection below goes through the module-level setIfChanged: the
