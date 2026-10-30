@@ -6,52 +6,77 @@
 
 **非官方项目**：与小米、高德无关，也未获得其认可。仅供个人学习和自用，使用风险自负（给手环安装第三方应用有风险，请先读 [小米官方 Vela 文档](https://iot.mi.com/vela/quickapp/)）。
 
-## 小米手环 10 PRO 适配说明（本 fork）
+## ⚡ 快速开始（小米手环 10 PRO）
 
-原项目面向 **小米手环 9 NFC（192×490，Vela 4.x）**。本 fork 让它能装到 **小米手环 10 PRO（336×480，Vela 5.0）** 上，改动只有一处关键兼容性修复：
+下面是从零到能用的完整路径，**按编号一路做下去即可**。所有命令在仓库根目录执行（除非注明）。
 
-- `band-app/src/manifest.json` 的 `minPlatformVersion` 由 `1070` 改为 `1000`。依据：社区里已确认在 Band 10 PRO 跑通的「江浙沪离线导航」项目用的就是 `minPlatformVersion: 1000`；原值 `1070` 在 Vela 5.0 上可能被拒。
-- `designWidth` 保持 `192`：Vela 会按 `屏幕宽 / designWidth = 336 / 192 ≈ 1.75` 自动放大，布局比例不变，无需改任何布局代码。
-- 图标已放大到 **245×245**：在 336 屏上 `.nav-icon(140px)` 的真实物理像素就是 `140 × 336/192 = 245`，原生 245 避免运行时放大发虚（用 `node scripts/resize-band-icons.js` 生成，单测断言已同步为 245）。
+### 准备清单
 
-> ⚠️ **仍需真机验证的三点**（本编译环境无法连接手环，无法替你确认）：
-> 1. **AAR 1.4 与 Vela 5.0 互通**：手机 SDK 为官方 `xms-wearable-lib_1.4_release.aar`（原作者针对 Band 9）。Band 10 PRO 是 Vela 5.0，`sendMessage` 通道能否通未验证；若装上都收不到导航帧，需向小米要更新的 interconnect SDK。
-> 2. **RPK 构建工具**：本 fork 已验证 **hap-toolkit 2.1.0** 能成功构建本项目并产出 `minPlatformVersion:1000` 的 RPK（见下方「手环端构建（Band 10 PRO 推荐）」）。原 `aiot-toolkit 2.0.5` 路径在 Vela 5.0 上是否可运行**未验证**，仅作默认保留。
-> 3. 原作者标注的骑行模式、震动手感、长时间锁屏等本身即「未真机验证」，本次同样未验证。
+| 需要 | 说明 |
+|---|---|
+| Node.js ≥ 20、JDK 17、Python 3 | 构建用，JDK 作者用 24 验证 |
+| Android SDK（compileSdk 37） | 编译手机端，设 `ANDROID_HOME` 或在根目录 `local.properties` 写 `sdk.dir=...` |
+| 小米官方 SDK：`xms-wearable-lib_1.4_release.aar` | **不随仓库**，需自行下载（见 [docs/sdk-provenance.md](docs/sdk-provenance.md)），放到 `app/libs/` 后跑 `python scripts/check-aar-hash.py` 校验 |
+| 电脑装 **AstroBox** | 手环装 RPK 用 |
+| `adb` 已连上手机 | 装 APK 用，无线调试也可 |
 
-### 小米手环 10 PRO 安装步骤
-
-1. **构建**（详见下方「构建」）：
-   - 手机端：需 Android SDK（compileSdk 37）+ JDK 17 + 官方 `xms-wearable-lib_1.4_release.aar`（按 `docs/sdk-provenance.md` 取，放 `app/libs/`）。
-   - 手环端（Band 10 PRO 推荐）：`node scripts/build-rpk-hap21.js`（hap-toolkit 2.1.0，已验证产出 `minPlatformVersion:1000` 的 RPK，并用 `app/signing` 同源证书签名）。原 aiot-toolkit 2.0.5 路径：`cd band-app && npm install && cd .. && node scripts/build-rpk.js`。
-   - **关键**：RPK 与 APK 必须用**同一份签名证书**（小米 interconnect 要求）。首次构建手机端会在 `app/signing/` 自动生成证书，RPK 构建复用同一份；不要两边各生成一份。
-2. **装手机 APK**：`adb install -r app/build/outputs/apk/debug/app-debug.apk`。给「导航环」开**通知读取**权限；把「导航环」和「小米运动健康」都设为**自启动 + 省电无限制 + 豁免电池优化**，否则息屏后后台被冻结，手环收不到更新。
-3. **装手环 RPK（Band 10 PRO 走 AstroBox）**：
-   - 手环：**设置 → 系统操作 → 连接新手机**。
-   - 电脑打开 **AstroBox**，登录你的小米账号，按提示把手环配对到 AstroBox。
-   - 在 AstroBox 里选「安装快应用 / Install Quick App」，选择 `band-app/dist/com.minavigatering.probe.debug.*.rpk`。
-   - （Band 9 的官方「Debug → 第三方应用 → 安装 RPK」路径在 Band 10 PRO 上不适用，请走 AstroBox。）
-4. **首次设置**：手机打开「导航环」→ 允许通知读取 → 选步行 / 骑行 → 开启导航桥。
-5. **使用**：高德开始步行 / 骑行导航，手环「导航环」页自动打开，显示转向箭头 + 距离 + 路名，转向或临近路口时震动。
-
-### 手环端构建（Band 10 PRO 推荐：hap-toolkit 2.1.0）
-
-社区已确认 **hap-toolkit 2.1.0** 在 Band 10 PRO（Vela 5.0 / 336×480）上可跑。本 fork 已加好对应构建脚本，本地验证可正常产出 `minPlatformVersion:1000` 的 RPK，并用 `app/signing` 的同源证书签名（与手机 APK 互联一致）：
+### 第 1 步 · 构建手机端 APK
 
 ```bash
-# 推荐：一条命令完成（自动装依赖、生成 logo、复制证书、构建、校验）
-node scripts/build-rpk-hap21.js
-
-# 或走 npm script（在 band-app 目录）
-cd band-app && npm run build:hap21
-# 产物：band-app/dist/com.minavigatering.probe.debug.<versionName>.rpk
+export ANDROID_HOME=/path/to/Android/Sdk     # 或写 local.properties
+./gradlew :app:assembleDebug                 # Windows 用 gradlew.bat
+# 产物：app/build/outputs/apk/debug/app-debug.apk
 ```
 
-原 `aiot-toolkit 2.0.5` 路径仍保留（`node scripts/build-rpk.js`），作为默认构建；但它在 Vela 5.0 上是否可运行**未验证**，若 hap 版在你手环上装不上 / 打不开，再试 aiot 版。
+> 首次构建会**顺带在 `app/signing/` 生成调试证书**——手环 RPK 要复用它，别删。
 
-> 真机验证请按 [docs/band10pro-verification.md](docs/band10pro-verification.md) 的清单逐项记录结果（装得上 / 打不开、导航帧能否收到、震动手感、骑行模式、长时间锁屏等），便于复盘与回滚。
+### 第 2 步 · 构建手环端 RPK（Band 10 PRO 推荐，hap-toolkit 2.1.0）
 
-> 本 fork 仅修改了 `minPlatformVersion`，其余源码、协议、单测与原仓库一致；原作者的验证设备是手环 9，Band 10 PRO 的真机表现请以上面三点为准自行确认。
+```bash
+node scripts/build-rpk-hap21.js
+# 产物：band-app/dist/com.minavigatering.probe.debug.<versionName>.rpk
+# 已用 app/signing/ 的同源证书签名，与手机 APK 互联一致
+```
+
+### 第 3 步 · 装到手机
+
+```bash
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+装好后给「导航环」开**通知读取**权限；把「导航环」和「小米运动健康」都设为**自启动 + 省电无限制 + 豁免电池优化**（否则息屏后后台被冻结，手环收不到更新）。
+
+### 第 4 步 · 装到手环（走 AstroBox）
+
+1. 手环：**设置 → 系统操作 → 连接新手机**。
+2. 电脑打开 **AstroBox**，登录你的小米账号，按提示把手环配对到 AstroBox。
+3. 在 AstroBox 选「安装快应用 / Install Quick App」，选择 `band-app/dist/com.minavigatering.probe.debug.*.rpk`。
+
+> 注：Band 9 的官方「Debug → 第三方应用 → 安装 RPK」路径在 10 PRO 上不适用，请走 AstroBox。
+
+### 第 5 步 · 手机首次设置
+
+打开「导航环」→ 允许通知读取 → 选「步行」或「骑行」→ 开启导航桥。
+
+### 第 6 步 · 开导航
+
+高德开始步行 / 骑行导航，手环「导航环」页自动打开，显示转向箭头 + 距离 + 路名，转向或临近路口时震动。
+
+> ⚠️ **装完请先真机验证**：按 [docs/band10pro-verification.md](docs/band10pro-verification.md) 的清单逐项记录（能否装/开、导航帧能否收到、骑行/震动/长锁屏等）。有三处本环境无法替你确认的点见下节。
+
+## 小米手环 10 PRO 适配说明（本 fork）
+
+原项目面向 **小米手环 9 NFC（192×490，Vela 4.x）**。本 fork 让它能装到 **小米手环 10 PRO（336×480，Vela 5.0）**，相对原版只改了以下内容：
+
+- `manifest.json` 的 `minPlatformVersion` 由 `1070` 改为 `1000`（依据：社区已确认在 10 PRO 跑通的「江浙沪离线导航」用的就是 1000；原值 1070 在 Vela 5.0 上可能被拒）。
+- `designWidth` 保持 `192`：Vela 按 `屏幕宽 / designWidth = 336 / 192 ≈ 1.75` 自动放大，布局比例不变，零改动风险。
+- 14 个导航图标已放大到 **245×245**（336 屏上 `.nav-icon(140px)` 的真实物理像素，避免运行时放大发虚）。
+- 手环端构建改用 **hap-toolkit 2.1.0**（社区已确认在 10 PRO 可跑）；本 fork 已加 `scripts/build-rpk-hap21.js`，本地验证可产出 `minPlatformVersion:1000` 的 RPK 并用 `app/signing` 同源证书签名。原 `aiot-toolkit 2.0.5` 路径保留，但在 Vela 5.0 上是否可运行**未验证**。
+
+> ⚠️ **仍需你真机确认的三点**（本编译环境无法连接手环，无法替你确认）：
+> 1. **AAR 1.4 与 Vela 5.0 互通**：手机用官方 `xms-wearable-lib_1.4_release.aar`（原作者针对 Band 9）。若装上都收不到导航帧，需向小米要更新的 interconnect SDK。
+> 2. **hap 版 RPK 在你手环上能否装/开**（已本地验证可构建）。
+> 3. 骑行模式、震动手感、长时间锁屏——原作者即标注未验证，本次同样未验证。
 
 ## 它是怎么工作的
 
@@ -124,19 +149,19 @@ export ANDROID_HOME=/path/to/Android/Sdk
 
 ### 手环端（Vela 快应用 RPK）
 
-需要：Node.js 20 或更新（作者用 24）。
+需要：Node.js 20 或更新（作者用 24）。**小米手环 10 PRO 的照做版见上方「⚡ 快速开始」第 2 步。**
 
 ```bash
 # 小米手环 10 PRO（Vela 5.0 / 336×480）推荐路径：hap-toolkit 2.1.0
 node scripts/build-rpk-hap21.js
 # 产物：band-app/dist/com.minavigatering.probe.debug.<versionName>.rpk
 
-# 原默认路径（aiot-toolkit 2.0.5，未经 Vela 5.0 真机验证）
+# 原默认路径（aiot-toolkit 2.0.5，未经 Vela 5.0 真机验证，仅 Band 9 适用）
 cd band-app && npm install        # 安装 aiot-toolkit 2.0.5
 cd .. && node scripts/build-rpk.js
 ```
 
-- 手环应用和手机应用**必须同包名、同签名证书**（官方 interconnect 的要求），所以 RPK 用的是手机端 `app/signing/` 里的同一份证书，请先完成一次手机端构建。构建细节见 [docs/rpk-build.md](docs/rpk-build.md)。
+- 手环应用和手机应用**必须同包名、同签名证书**（官方 interconnect 的要求），所以 RPK 用的是手机端 `app/signing/` 里的同一份证书，**请先完成一次手机端构建**再构建 RPK。构建细节见 [docs/rpk-build.md](docs/rpk-build.md)。
 - 手环页是 UX + JavaScript（`band-app/src`），designWidth 192，Vela 会按 `屏幕宽/192` 自动放大（Band 10 PRO 上约 1.75×），布局比例不变。
 
 ### 测试
@@ -149,17 +174,18 @@ cd .. && node --test band-app/test/startup.test.js band-app/test/session.test.js
 
 `scripts/test-product-runtime.js`（手环页的“宿主门禁”）依赖作者本机上一个只读的快应用运行层（路径写死在脚本里），**外部环境无法直接运行**。`tests/` 下的 Python 脚本是实机探针工具的测试，也和作者的设备环境相关。
 
-## 安装
+## 其他设备（小米手环 9 NFC 等 Vela 手环）
 
 目前仓库不提供预编译的 APK / RPK，请先按上面的“构建”自己生成。
 
-1. **手机**：`adb install -r app/build/outputs/apk/debug/app-debug.apk`。
-2. **手环**：把 RPK 手动装到手环上。
-   - **小米手环 9 NFC**：参考小米官方资料里的“Debug → 第三方应用 → 安装 RPK”路径（需要对应版本的小米运动健康，见 [PROJECT_SPEC.md](PROJECT_SPEC.md) 第 10 节），或使用第三方蓝牙安装工具。
-   - **小米手环 10 PRO**：该路径不适用，请走 **AstroBox**（手环「设置 → 系统操作 → 连接新手机」，电脑用 AstroBox 登录小米账号配对后「安装快应用」选此 RPK）。详见顶部「小米手环 10 PRO 适配说明」。
-   - 装之前请核对哈希，不要装来路不明的包。
+- **手机端**：`adb install -r app/build/outputs/apk/debug/app-debug.apk`。
+- **小米手环 9 NFC**：参考小米官方资料里的“Debug → 第三方应用 → 安装 RPK”路径（需要对应版本的小米运动健康，见 [PROJECT_SPEC.md](PROJECT_SPEC.md) 第 10 节），或使用第三方蓝牙安装工具。
+- **小米手环 10 PRO**：不走上面的官方路径，请见顶部「⚡ 快速开始」第 4 步（AstroBox）。
+- 装之前请核对哈希，不要装来路不明的包。
 
 ## 首次设置
+
+> Band 10 PRO 的极简版见上方「⚡ 快速开始」第 5 步；下面是每一步为什么这样做。
 
 在手机上打开“导航环”，主页下半部分有“设置清单”，按下面三步来（都做完后这一块会自己消失）：
 
