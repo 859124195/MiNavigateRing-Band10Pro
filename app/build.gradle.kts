@@ -14,7 +14,7 @@ val signingProperties = Properties().apply {
 
 android {
     namespace = "com.minavigatering.probe"
-    compileSdk = 37
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.minavigatering.probe"
