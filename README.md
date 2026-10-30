@@ -8,59 +8,33 @@
 
 ## ⚡ 快速开始（小米手环 10 PRO）
 
-下面是从零到能用的完整路径，**按编号一路做下去即可**。所有命令在仓库根目录执行（除非注明）。
+安装分两步：**先做完「📋 提前准备」（不用手环，现在就能搞），再在手环到手后做「🔧 上手安装」**。命令在仓库根目录执行（除非注明）。
 
-### 准备清单
+### 📋 提前准备（不用手环，现在就能做）
 
-| 需要 | 说明 |
-|---|---|
-| Node.js ≥ 20、JDK 17、Python 3 | 构建用，JDK 作者用 24 验证 |
-| Android SDK（compileSdk 37） | 编译手机端，设 `ANDROID_HOME` 或在根目录 `local.properties` 写 `sdk.dir=...` |
-| 小米官方 SDK：`xms-wearable-lib_1.4_release.aar` | **不随仓库**，需自行下载（见 [docs/sdk-provenance.md](docs/sdk-provenance.md)），放到 `app/libs/` 后跑 `python scripts/check-aar-hash.py` 校验 |
-| 电脑装 **AstroBox** | 手环装 RPK 用 |
-| `adb` 已连上手机 | 装 APK 用，无线调试也可 |
+| # | 任务 | 说明 | 状态 |
+|---|---|---|---|
+| 1 | 准备官方 SDK（AAR） | 下载 `xms-wearable-lib_1.4_release.aar` 放 `app/libs/`，跑 `python scripts/check-aar-hash.py` 校验（见 [docs/sdk-provenance.md](docs/sdk-provenance.md)） | ✅ 本仓库已就绪 |
+| 2 | 生成签名证书 | 首次构建手机端会生成在 `app/signing/`，RPK 复用同一份 | ✅ 本仓库已就绪 |
+| 3 | 构建手环端 RPK | `node scripts/build-rpk-hap21.js` → `band-app/dist/*.rpk`（已用同源证书签名） | ✅ 本仓库已构建好 |
+| 4 | 电脑装 **AstroBox** 并登录小米账号 | 装 RPK 用，只需账号、不用手环 | ⬜ 需你操作 |
+| 5 | 手机开 USB 调试、装好「小米运动健康」 | 装 APK 与互联用 | ⬜ 需你操作 |
+| 6 | 构建手机端 APK（需 Android SDK） | `./gradlew :app:assembleDebug` → `app/build/outputs/apk/debug/app-debug.apk` | ⬜ 需你机器 |
 
-### 第 1 步 · 构建手机端 APK
+> 第 1–3 项在本编译环境已提前完成；你在本机重做时按下方「构建」章节跑一遍即可。第 4–6 项不依赖手环，拿到手环前就能准备好。
 
-```bash
-export ANDROID_HOME=/path/to/Android/Sdk     # 或写 local.properties
-./gradlew :app:assembleDebug                 # Windows 用 gradlew.bat
-# 产物：app/build/outputs/apk/debug/app-debug.apk
-```
+### 🔧 上手安装（手环到手后，约 5 分钟）
 
-> 首次构建会**顺带在 `app/signing/` 生成调试证书**——手环 RPK 要复用它，别删。
+1. **装到手机**：`adb install -r app/build/outputs/apk/debug/app-debug.apk`；给「导航环」开**通知读取**权限；把「导航环」和「小米运动健康」都设为**自启动 + 省电无限制 + 豁免电池优化**（否则息屏后后台被冻结，手环收不到更新）。
+2. **装到手环（AstroBox）**：
+   1. 手环：**设置 → 系统操作 → 连接新手机**。
+   2. 电脑打开 **AstroBox**，登录你的小米账号，按提示把手环配对到 AstroBox。
+   3. 在 AstroBox 选「安装快应用 / Install Quick App」，选择 `band-app/dist/com.minavigatering.probe.debug.*.rpk`。
+   > 注：Band 9 的官方「Debug → 第三方应用 → 安装 RPK」路径在 10 PRO 上不适用，请走 AstroBox。
+3. **手机首次设置**：打开「导航环」→ 允许通知读取 → 选「步行」或「骑行」→ 开启导航桥。
+4. **开导航**：高德开始步行 / 骑行导航，手环「导航环」页自动打开，显示转向箭头 + 距离 + 路名，转向或临近路口时震动。
 
-### 第 2 步 · 构建手环端 RPK（Band 10 PRO 推荐，hap-toolkit 2.1.0）
-
-```bash
-node scripts/build-rpk-hap21.js
-# 产物：band-app/dist/com.minavigatering.probe.debug.<versionName>.rpk
-# 已用 app/signing/ 的同源证书签名，与手机 APK 互联一致
-```
-
-### 第 3 步 · 装到手机
-
-```bash
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-```
-
-装好后给「导航环」开**通知读取**权限；把「导航环」和「小米运动健康」都设为**自启动 + 省电无限制 + 豁免电池优化**（否则息屏后后台被冻结，手环收不到更新）。
-
-### 第 4 步 · 装到手环（走 AstroBox）
-
-1. 手环：**设置 → 系统操作 → 连接新手机**。
-2. 电脑打开 **AstroBox**，登录你的小米账号，按提示把手环配对到 AstroBox。
-3. 在 AstroBox 选「安装快应用 / Install Quick App」，选择 `band-app/dist/com.minavigatering.probe.debug.*.rpk`。
-
-> 注：Band 9 的官方「Debug → 第三方应用 → 安装 RPK」路径在 10 PRO 上不适用，请走 AstroBox。
-
-### 第 5 步 · 手机首次设置
-
-打开「导航环」→ 允许通知读取 → 选「步行」或「骑行」→ 开启导航桥。
-
-### 第 6 步 · 开导航
-
-高德开始步行 / 骑行导航，手环「导航环」页自动打开，显示转向箭头 + 距离 + 路名，转向或临近路口时震动。
+> ⚠️ **装完请先真机验证**：按 [docs/band10pro-verification.md](docs/band10pro-verification.md) 的清单逐项记录（能否装/开、导航帧能否收到、骑行/震动/长锁屏等）。有三处本环境无法替你确认的点见下节。
 
 > ⚠️ **装完请先真机验证**：按 [docs/band10pro-verification.md](docs/band10pro-verification.md) 的清单逐项记录（能否装/开、导航帧能否收到、骑行/震动/长锁屏等）。有三处本环境无法替你确认的点见下节。
 
