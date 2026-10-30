@@ -14,3 +14,10 @@ app/signing/signing.local.properties
 .temp_band-app/
 # Xiaomi wearable SDK: third-party file, not redistributed here (see docs/sdk-provenance.md)
 app/libs/*.aar
+
+# 调试签名证书：为让手机 APK 与手环 RPK 始终用【同一把证书】（小米互联通信的硬性要求），
+# 把固定的调试证书固化进仓库。这些仅供本地/CI 调试联调用，非生产密钥。
+!app/signing/debug.jks
+!app/signing/certificate.pem
+!app/signing/private.pem
+!app/signing/signing.local.properties

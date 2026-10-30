@@ -6,8 +6,9 @@
 #       你不用在自己电脑装 SDK，直接从 Release 下载两个文件装即可。
 #
 # ⚠️ 证书说明：APK 与 RPK 在同一个 CI run 内用【同一份临时证书】签名
-#   （满足小米 interconnect “同包名同证书” 要求）。因此每次 Release 的
-#    APK 与 RPK 必须【成对下载、成对使用】，不要混用不同 Release 的包。
+#   （满足小米 interconnect “同包名同证书” 要求）。调试证书（app/signing/ 下的
+#    debug.jks + 配套 PEM）已固化进仓库，APK 与 RPK 无论本地/CI、哪次构建都用同一把证书，
+#    但仍建议从同一次 Release 成对下载安装，避免混用旧包。
 
 name: Build & Release (Band 10 PRO)
 
@@ -158,5 +159,8 @@ jobs:
 
             ⚠️ **APK 与 RPK 已用同一证书签名，请【两个都下载、一起安装】。**
             不要把这个 RPK 和别处编译的 APK 混用（证书不一致会导致手环收不到导航）。
+
+            📌 若手机上已装过**旧版 APK**（之前用系统默认调试密钥签名），新包密钥不同、
+            无法覆盖安装，请先在手机上**卸载旧 APK** 再装本次的 `app-debug.apk`。
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
