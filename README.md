@@ -19,7 +19,7 @@
 | 3 | 构建手环端 RPK | `node scripts/build-rpk-hap21.js` → `band-app/dist/*.rpk`（已用同源证书签名） | ✅ 本仓库已构建好 |
 | 4 | 电脑装 **AstroBox** 并登录小米账号 | 装 RPK 用，只需账号、不用手环 | ⬜ 需你操作 |
 | 5 | 手机开 USB 调试、装好「小米运动健康」 | 装 APK 与互联用 | ⬜ 需你操作 |
-| 6 | 构建手机端 APK（需 Android SDK） | `./gradlew :app:assembleDebug` → `app/build/outputs/apk/debug/app-debug.apk` | ⬜ 需你机器 |
+| 6 | 构建手机端 APK（需 Android SDK） | `./gradlew :app:assembleDebug` → `app/build/outputs/apk/debug/app-debug.apk`（不想装 SDK？见下方 🤖 自动出包，云端代编） | ⬜ 需你机器 |
 
 > 第 1–3 项在本编译环境已提前完成；你在本机重做时按下方「构建」章节跑一遍即可。第 4–6 项不依赖手环，拿到手环前就能准备好。
 
@@ -33,8 +33,6 @@
    > 注：Band 9 的官方「Debug → 第三方应用 → 安装 RPK」路径在 10 PRO 上不适用，请走 AstroBox。
 3. **手机首次设置**：打开「导航环」→ 允许通知读取 → 选「步行」或「骑行」→ 开启导航桥。
 4. **开导航**：高德开始步行 / 骑行导航，手环「导航环」页自动打开，显示转向箭头 + 距离 + 路名，转向或临近路口时震动。
-
-> ⚠️ **装完请先真机验证**：按 [docs/band10pro-verification.md](docs/band10pro-verification.md) 的清单逐项记录（能否装/开、导航帧能否收到、骑行/震动/长锁屏等）。有三处本环境无法替你确认的点见下节。
 
 > ⚠️ **装完请先真机验证**：按 [docs/band10pro-verification.md](docs/band10pro-verification.md) 的清单逐项记录（能否装/开、导航帧能否收到、骑行/震动/长锁屏等）。有三处本环境无法替你确认的点见下节。
 
@@ -103,11 +101,27 @@
 
 高德的通知内容不固定：有时只有“高德地图持续为您导航”这类通用文字，没有方向和距离，这时手环显示“暂无导航”，应用不会猜方向。
 
+## 🤖 自动出包（CI，免装 Android SDK）
+
+不想在自己电脑装 Android SDK / Gradle 那一套？这个仓库自带 GitHub Actions 工作流，在云端帮你把 **手机 APK + 手环 RPK 一起编好**，发布到仓库的 Releases 页面。你只要下载两个文件装上去就行。
+
+**怎么用**
+1. 把改动推送到 `main` 分支（或到仓库 Actions 页点 `Build & Release (Band 10 PRO)` → `Run workflow`）。
+2. 等几分钟，构建完成后打开仓库右侧 **Releases**，找到最新的 `CI Build #…`。
+3. 下载里面的 `app-debug.apk` 和 `com.minavigatering.probe.debug.*.rpk`。
+
+**重要约束**
+- ⚠️ 每次 Release 的 APK 和 RPK 是用**同一份证书**签的，必须**两个一起下载、一起安装**。不要把这个 RPK 和别处（比如你自己本地编的）APK 混用 —— 证书不一致手环会收不到导航。
+- 工作流每次运行都会生成新的临时证书，所以**跨 Release 的旧包也不能和新包混用**。
+- 编译细节见 [.github/workflows/build-release.yml](.github/workflows/build-release.yml)：云端下载官方 AAR → 校验哈希 → Gradle 编 APK → hap-toolkit 2.1.0 编 RPK → 上传 Release。
+
+> 真机实测清单仍适用：装好后请按 [docs/band10pro-verification.md](docs/band10pro-verification.md) 逐项记录。
+
 ## 构建
 
 ### 手机端（Android）
 
-需要：JDK 17、Android SDK（compileSdk 37）、Python 3 和 `keytool`（首次构建时用来生成**本地**调试签名）。
+需要：JDK 17、Android SDK（compileSdk 37）、Python 3 和 `keytool`（首次构建时用来生成**本地**调试签名）。嫌装 SDK 麻烦？见上方 🤖 自动出包（CI），云端直接帮你编好。
 
 ```bash
 # 二选一：设置环境变量，或在仓库根目录建 local.properties（含 sdk.dir=...，已被 .gitignore 忽略）
@@ -118,7 +132,7 @@ export ANDROID_HOME=/path/to/Android/Sdk
 ```
 
 - 技术栈：Kotlin、Jetpack Compose、Android Gradle Plugin 9.4.1、Gradle 9.8.1（用仓库自带的 wrapper）。minSdk 26，targetSdk 36。
-- 首次构建会执行 `scripts/gen-debug-signing.py`，在 `app/signing/` 生成调试密钥、证书和口令文件。**这些文件不入库**（`.gitignore` 已忽略 `*.jks`、`*.pem` 等）；请自己保管，不要提交。
+- 首次构建会执行 `scripts/gen-debug-signing.py`，在 `app/signing/` 生成调试密钥、证书和口令文件。这些文件未随源码提交（本地生成、不入库）；CI 中则由工作流每次重新生成，不依赖仓库里的证书。
 - 小米官方手机端 SDK（`xms-wearable-lib_1.4_release.aar`）**不随仓库分发**，没有它手机端无法编译：请按 [docs/sdk-provenance.md](docs/sdk-provenance.md) 从小米官方示例包里取出这个文件，放进 `app/libs/`，再用 `python scripts/check-aar-hash.py` 校验哈希（来源、大小、哈希都写在那份文档里）。
 
 ### 手环端（Vela 快应用 RPK）

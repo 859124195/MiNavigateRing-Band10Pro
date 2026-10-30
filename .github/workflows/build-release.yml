@@ -1,0 +1,144 @@
+# 小米手环 10 PRO 导航环 · 自动出包（CI）
+#
+# 触发：推送到 main 分支，或手动在 Actions 页面点 “Run workflow”。
+# 产物：自动构建手机端 APK + 手环端 RPK，并发布到 GitHub Release。
+# 作用：把“本地必须装 Android SDK”的那一步搬到云端，
+#       你不用在自己电脑装 SDK，直接从 Release 下载两个文件装即可。
+#
+# ⚠️ 证书说明：APK 与 RPK 在同一个 CI run 内用【同一份临时证书】签名
+#   （满足小米 interconnect “同包名同证书” 要求）。因此每次 Release 的
+#    APK 与 RPK 必须【成对下载、成对使用】，不要混用不同 Release 的包。
+
+name: Build & Release (Band 10 PRO)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# 并发保护：同一分支只跑一个构建，避免重复触发
+concurrency:
+  group: build-release-${{ github.ref }}
+  cancel-in-progress: false
+
+# 创建 Release 必需
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 JDK 17（编译手机端 + 生成证书用 keytool）
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: 设置 Node.js 20（构建手环 RPK）
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 设置 Python 3（生成证书脚本依赖）
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: 安装 Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 安装 SDK 平台与构建工具（compileSdk 37 / AGP 9.4.1）
+        run: |
+          export ANDROID_HOME="$ANDROID_HOME"
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+          yes | sdkmanager --licenses
+          sdkmanager "platforms;android-37" "build-tools;35.0.0"
+
+      - name: 缓存 Gradle 依赖
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+
+      - name: 缓存 npm 依赖
+        uses: actions/cache@v4
+        with:
+          path: band-app/node_modules
+          key: npm-${{ hashFiles('band-app/package.json') }}
+
+      - name: 下载并校验小米官方 AAR（不入库，构建时用）
+        run: |
+          curl -sS -m 120 -o _aar_src.zip "https://cdn.cnbj3-fusion.fds.api.mi-img.com/quickapp-vela/interconnect_dev_test_demo.zip"
+          python3 - <<'PY'
+          import zipfile, os, shutil, hashlib
+          EXPECTED = "9c40fd1c5409bb948523d503af71e2978ae522c35636afe7d64f474c0f6bc195"
+          zp = "_aar_src.zip"
+          os.makedirs("app/libs", exist_ok=True)
+          z = zipfile.ZipFile(zp)
+          name = [n for n in z.namelist() if n.endswith("xms-wearable-lib_1.4_release.aar") and "libs" in n][0]
+          z.extract(name, "_aartmp")
+          shutil.copyfile("_aartmp/" + name, "app/libs/xms-wearable-lib_1.4_release.aar")
+          data = open("app/libs/xms-wearable-lib_1.4_release.aar", "rb").read()
+          sha = hashlib.sha256(data).hexdigest()
+          assert sha == EXPECTED, "AAR 哈希不匹配: " + sha
+          print("AAR 校验通过, 字节数:", len(data))
+          PY
+          rm -rf _aar_src.zip _aartmp
+
+      - name: 构建手机端 APK（preBuild 会自动生成签名证书到 app/signing）
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleDebug --no-daemon
+        env:
+          GRADLE_OPTS: "-Xmx4g -XX:MaxMetaspaceSize=1g"
+
+      - name: 构建手环端 RPK（hap-toolkit 2.1.0，复用上面生成的同源证书）
+        run: |
+          cd band-app && npm install
+          cd ..
+          node scripts/build-rpk-hap21.js
+
+      - name: 定位产物
+        id: artifacts
+        run: |
+          APK=$(find app/build/outputs/apk/debug -name "*.apk" | head -1)
+          RPK=$(find band-app/dist -name "*.rpk" | head -1)
+          echo "apk=$APK" >> "$GITHUB_OUTPUT"
+          echo "rpk=$RPK" >> "$GITHUB_OUTPUT"
+          echo "APK: $APK"
+          echo "RPK: $RPK"
+
+      - name: 上传产物备份（Artifact，始终执行，即使 Release 失败也有包）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MiNavigateRing-Band10Pro-${{ github.run_id }}
+          path: |
+            ${{ steps.artifacts.outputs.apk }}
+            ${{ steps.artifacts.outputs.rpk }}
+          if-no-files-found: ignore
+
+      - name: 发布到 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ci-${{ github.run_id }}
+          name: CI Build #${{ github.run_number }}（手环 10 PRO）
+          files: |
+            ${{ steps.artifacts.outputs.apk }}
+            ${{ steps.artifacts.outputs.rpk }}
+          body: |
+            🤖 自动构建 · 小米手环 10 PRO 导航环
+
+            - 手机 APK：`app-debug.apk`
+            - 手环 RPK：`com.minavigatering.probe.debug.*.rpk`
+
+            ⚠️ **APK 与 RPK 已用同一证书签名，请【两个都下载、一起安装】。**
+            不要把这个 RPK 和别处编译的 APK 混用（证书不一致会导致手环收不到导航）。
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
