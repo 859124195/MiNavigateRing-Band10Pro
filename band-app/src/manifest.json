@@ -1,10 +1,10 @@
 {
   "package": "com.minavigatering.probe",
   "name": "导航环",
-  "versionName": "0.2.0-navigation",
-  "versionCode": 11,
+  "versionName": "0.2.1-band10pro",
+  "versionCode": 12,
   "icon": "/logo.png",
-  "minPlatformVersion": 1070,
+  "minPlatformVersion": 1000,
   "deviceTypeList": [
     "watch"
   ],
