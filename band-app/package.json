@@ -3,9 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "aiot build"
+    "build": "aiot build",
+    "build:hap21": "node ../scripts/build-rpk-hap21.js"
   },
   "devDependencies": {
-    "aiot-toolkit": "2.0.5"
+    "aiot-toolkit": "2.0.5",
+    "hap-toolkit": "^2.1.0",
+    "adm-zip": "^0.6.1"
   }
 }

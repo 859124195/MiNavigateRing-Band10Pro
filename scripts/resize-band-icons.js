@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 "use strict";
 
-// Resize the 14 navigation direction icons from their on-disk size (baseline
-// 112x112) to the native display size used by .nav-icon (140x140) so the band
-// no longer upscales the bitmap at runtime. Pure Node built-ins only: PNG
-// decode/encode is done here with zlib, no image library and no external tool.
+// Resize the 14 navigation direction icons to the native display size used on
+// Xiaomi Smart Band 10 PRO (336x480, Vela 5.0). With designWidth=192 and the
+// .nav-icon element declared at 140px in the .ux, the band renders it at
+// 140 * 336/192 = 245 physical px, so 245x245 is the native bitmap size that
+// avoids runtime upscaling. Pure Node built-ins only: PNG decode/encode is done
+// here with zlib, no image library and no external tool.
 //
 // Contract AC4:
 //   * output is 8-bit, color type 6 (RGBA), non-interlaced PNG
@@ -24,7 +26,7 @@ const REPO_ROOT = path.resolve(__dirname, "..");
 const IMAGES_DIR = path.join(REPO_ROOT, "band-app", "src", "common", "images");
 const CODEC_PATH = path.join(REPO_ROOT, "band-app", "src", "common", "codec.js");
 
-const TARGET = 140;
+const TARGET = 245;
 const MEAN_ALPHA_TOLERANCE = 0.03; // +/-3%
 
 // The authoritative id list is the read-only ACTION_LABELS map in the codec, so

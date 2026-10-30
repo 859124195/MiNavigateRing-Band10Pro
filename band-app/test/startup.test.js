@@ -314,9 +314,11 @@ test("app.ux onCreate wires a working host and renders a left turn", () => {
 
 // AC4: the 14 direction icons the page renders through
 // /common/images/<action>.png must already be at the .nav-icon native size
-// (140x140). Any other size means the band host scales the bitmap at runtime,
-// and PNG8/color type 3 would drop the anti-aliased alpha the icons rely on.
-test("every ACTION_LABELS icon is a native 140x140 8-bit RGBA PNG", () => {
+// (245x245 on Band 10 PRO). With designWidth=192 and the .nav-icon element
+// declared at 140px, the band renders it at 140 * 336/192 = 245 physical px,
+// so 245x245 is the native bitmap that avoids runtime upscaling (which would
+// drop the anti-aliased alpha the icons rely on).
+test("every ACTION_LABELS icon is a native 245x245 8-bit RGBA PNG", () => {
   const codec = require(path.join(srcDir, "common", "codec.js"));
   const ids = Object.keys(codec.ACTION_LABELS);
   assert.strictEqual(ids.length, 14, "ACTION_LABELS must expose 14 actions");
@@ -326,8 +328,8 @@ test("every ACTION_LABELS icon is a native 140x140 8-bit RGBA PNG", () => {
     const buf = fs.readFileSync(file);
     assert.ok(buf.length > 33, id + ".png is too short to hold an IHDR chunk");
     assert.strictEqual(buf.toString("latin1", 12, 16), "IHDR", id + ".png: first chunk must be IHDR");
-    assert.strictEqual(buf.readUInt32BE(16), 140, id + ".png width must be 140");
-    assert.strictEqual(buf.readUInt32BE(20), 140, id + ".png height must be 140");
+    assert.strictEqual(buf.readUInt32BE(16), 245, id + ".png width must be 245");
+    assert.strictEqual(buf.readUInt32BE(20), 245, id + ".png height must be 245");
     assert.strictEqual(buf[24], 8, id + ".png bit depth must be 8");
     assert.strictEqual(buf[25], 6, id + ".png color type must be 6 (RGBA)");
   }
