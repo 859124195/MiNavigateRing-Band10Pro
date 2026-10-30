@@ -52,7 +52,7 @@ jobs:
       # 改为手动下载安装 command-line tools，路径稳定且可控。
       # 注意：python zipfile 解压不保留可执行位，需手动 chmod +x；
       # 且只把 ANDROID_HOME 写入 GITHUB_ENV（写整个 PATH 会覆盖 node/python 的 PATH）。
-      - name: 安装 Android SDK（compileSdk 36 / AGP 9.4.1）
+      - name: 安装 Android SDK（compileSdk 37 / AGP 9.4.1）
         run: |
           export ANDROID_HOME="$HOME/android-sdk"
           export JAVA_BIN="$JAVA_HOME/bin"
@@ -71,7 +71,8 @@ jobs:
           chmod +x "$ANDROID_HOME/cmdline-tools/latest/bin/"*
           export PATH="$JAVA_BIN:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
           yes | sdkmanager --licenses
-          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+          # 注意：平台包带修订号，裸名 platforms;android-37 不存在，必须写 platforms;android-37.2
+          sdkmanager "platforms;android-37.2" "build-tools;37.0.0"
           echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
           rm -f cmdtools.zip
 

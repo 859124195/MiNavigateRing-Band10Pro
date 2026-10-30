@@ -73,4 +73,4 @@ AAR 自带 `AndroidManifest.xml` 声明查询以下两个包：
 | Kotlin Compose 插件 | `org.jetbrains.kotlin.plugin.compose` 2.2.20（不应用 `org.jetbrains.kotlin.android`） |
 | Compose BOM | `androidx.compose:compose-bom:2026.09.00` |
 | JDK | Temurin 21（AGP 9.x 运行要求） |
-| compileSdk / targetSdk / minSdk | 36 / 36 / 26 |
+| compileSdk / targetSdk / minSdk | 37 / 36 / 26 |

@@ -121,7 +121,7 @@
 
 ### 手机端（Android）
 
-需要：JDK 21（AGP 9.x 运行要求）、Android SDK（compileSdk 36）、Python 3 和 `keytool`（首次构建时用来生成**本地**调试签名）。嫌装 SDK 麻烦？见上方 🤖 自动出包（CI），云端直接帮你编好。
+需要：JDK 21（AGP 9.x 运行要求）、Android SDK（compileSdk 37，注意平台包名是 `android-37.2`）、Python 3 和 `keytool`（首次构建时用来生成**本地**调试签名）。嫌装 SDK 麻烦？见上方 🤖 自动出包（CI），云端直接帮你编好。
 
 ```bash
 # 二选一：设置环境变量，或在仓库根目录建 local.properties（含 sdk.dir=...，已被 .gitignore 忽略）
