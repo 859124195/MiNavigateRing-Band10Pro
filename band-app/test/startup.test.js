@@ -144,7 +144,11 @@ const COUNTED_METHODS = [
   "callGC",
   "maybeRunGC",
   "updatePerfText",
-  "finishTickPerf"
+  "finishTickPerf",
+  // 手环每 5 次 tick 回传一次自身状态（黑屏诊断回路）。漏绑它曾让 tick 抛
+  // "this.maybeReportStatus is not a function"，真实框架会绑定导出里的全部
+  // 方法，这里的名单必须与 index.ux 的导出保持一致。
+  "maybeReportStatus"
 ];
 
 function makeCountingHost(def) {
@@ -375,7 +379,8 @@ test("index.ux onInit renders the connecting state", () => {
     "callGC",
     "maybeRunGC",
     "updatePerfText",
-    "finishTickPerf"
+    "finishTickPerf",
+    "maybeReportStatus"
   ].forEach((name) => {
     pageVm[name] = def[name].bind(pageVm);
   });
@@ -402,6 +407,113 @@ test("index.ux onInit renders the connecting state", () => {
   assert.strictEqual(stub.timers.registered.length, 1);
 
   // Leave no live timer behind for the rest of the run.
+  pageVm.clearTickTimer();
+  assert.strictEqual(stub.timers.registered.length, 0);
+});
+
+// 黑屏诊断回路（68ac662 引入，此前无任何覆盖）：手环每 5 次 tick 通过
+// this.$app.$def.reportBandStatus 回传一次自身显示状态，载荷带标题/距离/路名/
+// 诊断/错误；回传失败只能影响诊断，不能影响显示，也不能打断后续 tick。
+test("index.ux reports band status every 5 ticks without breaking the display", () => {
+  const session = require(SESSION_JS);
+  session.resetForTest();
+
+  const stub = makeTimerStub();
+  const def = loadScript(
+    INDEX_UX,
+    (code) => code.replace("export default", "module.exports ="),
+    stub.overrides
+  );
+
+  const pageVm = Object.assign({}, def.data);
+  [
+    "onInit",
+    "onReady",
+    "onShow",
+    "onHide",
+    "onDestroy",
+    "tick",
+    "sharedSession",
+    "applyAbnormal",
+    "applyDisplay",
+    "bumpLife",
+    "armTickTimer",
+    "clearTickTimer",
+    "toggleDebug",
+    "ensurePerfState",
+    "gcDue",
+    "callGC",
+    "maybeRunGC",
+    "updatePerfText",
+    "finishTickPerf",
+    "maybeReportStatus"
+  ].forEach((name) => {
+    pageVm[name] = def[name].bind(pageVm);
+  });
+
+  const reported = [];
+  pageVm.$app = {
+    $def: {
+      navInit: "ok",
+      navSession: session,
+      reportBandStatus(text) {
+        reported.push(text);
+      }
+    }
+  };
+
+  // 一帧真实数据：左转 120 米、有路名，页面进入导航显示。
+  session.onMessage(
+    {
+      v: 1,
+      kind: "state",
+      id: "status",
+      navStatus: "active",
+      action: "left",
+      actionId: "status-1",
+      distanceM: 120,
+      roadName: "学院路",
+      link: "connected",
+      sentAtMs: Date.now()
+    },
+    Date.now()
+  );
+
+  // onInit 的同步 tick 记 1 次；再来 4 次到第 5 次触发回传，整轮只回传一次。
+  assert.doesNotThrow(() => pageVm.onInit());
+  for (let i = 0; i < 4; i += 1) {
+    pageVm.tick();
+  }
+  assert.strictEqual(reported.length, 1, "every 5th tick reports exactly once");
+
+  const payload = JSON.parse(reported[0]);
+  assert.strictEqual(payload.kind, "bandstatus");
+  assert.strictEqual(payload.v, 1);
+  assert.strictEqual(payload.title, "左转");
+  assert.strictEqual(payload.hasDistance, true);
+  assert.strictEqual(payload.roadVisible, true);
+  assert.strictEqual(payload.error, "");
+  assert.ok(typeof payload.id === "string" && payload.id.indexOf("bs-") === 0);
+  assert.ok(typeof payload.sentAtMs === "number");
+  assert.strictEqual(pageVm.title, "左转", "reporting must not disturb the display");
+
+  // 计数归零后再 5 次 tick，第二次回传发生。
+  for (let i = 0; i < 5; i += 1) {
+    pageVm.tick();
+  }
+  assert.strictEqual(reported.length, 2);
+
+  // 回传抛错只影响诊断：显示保持原值，后续 tick 不再受影响。
+  pageVm.$app.$def.reportBandStatus = () => {
+    throw new Error("boom");
+  };
+  assert.doesNotThrow(() => pageVm.tick());
+  assert.strictEqual(pageVm.title, "左转");
+
+  // 没有 reportBandStatus 的宿主（老版本 app.ux）也不能让 tick 抛错。
+  delete pageVm.$app.$def.reportBandStatus;
+  assert.doesNotThrow(() => pageVm.tick());
+
   pageVm.clearTickTimer();
   assert.strictEqual(stub.timers.registered.length, 0);
 });

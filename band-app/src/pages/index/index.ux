@@ -330,7 +330,15 @@ export default {
     // Both paths are timed, and the optional GC is inside the measured span.
     this.maybeRunGC(startMs);
     this.finishTickPerf(startMs, shared);
-    this.maybeReportStatus(startMs);
+    // 状态回传是纯诊断回路：方法缺失或回传抛错都只能影响诊断，绝不能打断显示
+    // 刷新。真实框架会绑定导出里的全部方法，这里按同一套"best effort"原则兜底。
+    if (typeof this.maybeReportStatus === "function") {
+      try {
+        this.maybeReportStatus(startMs);
+      } catch (err) {
+        // 回传失败不影响手环显示。
+      }
+    }
   },
 
   // 每 5 次 tick（约 5 秒）把"手环自身显示状态"回传给手机，手机日志里就能直接看到手环
