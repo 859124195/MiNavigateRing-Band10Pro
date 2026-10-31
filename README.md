@@ -15,7 +15,7 @@
 | # | 任务 | 说明 | 状态 |
 |---|---|---|---|
 | 1 | 准备官方 SDK（AAR） | 下载 `xms-wearable-lib_1.4_release.aar` 放 `app/libs/`，跑 `python scripts/check-aar-hash.py` 校验（见 [docs/sdk-provenance.md](docs/sdk-provenance.md)） | ✅ 本仓库已就绪 |
-| 2 | 生成签名证书 | 首次构建手机端会生成在 `app/signing/`，RPK 复用同一份 | ✅ 本仓库已就绪 |
+| 2 | 签名证书 | 调试证书已固化在 `app/signing/`（`debug.jks` + 配套 PEM），手机 APK 与手环 RPK 复用同一份 | ✅ 本仓库已就绪 |
 | 3 | 构建手环端 RPK | `node scripts/build-rpk-hap21.js` → `band-app/dist/*.rpk`（已用同源证书签名） | ✅ 本仓库已构建好 |
 | 4 | 电脑装 **AstroBox** 并登录小米账号 | 装 RPK 用，只需账号、不用手环 | ⬜ 需你操作 |
 | 5 | 手机开 USB 调试、装好「小米运动健康」 | 装 APK 与互联用 | ⬜ 需你操作 |
@@ -132,7 +132,7 @@ export ANDROID_HOME=/path/to/Android/Sdk
 ```
 
 - 技术栈：Kotlin、Jetpack Compose、Android Gradle Plugin 9.4.1、Gradle 9.8.1（用仓库自带的 wrapper）。minSdk 26，targetSdk 36。
-- 首次构建会执行 `scripts/gen-debug-signing.py`，在 `app/signing/` 生成调试密钥、证书和口令文件。这些文件未随源码提交（本地生成、不入库）；CI 中则由工作流每次重新生成，不依赖仓库里的证书。
+- 调试签名证书（`app/signing/debug.jks` + 配套 PEM + 口令文件）**已固化进仓库**，手机 APK 与手环 RPK 无论本地还是 CI 构建都复用同一把证书，满足小米互联「同包名同证书」的硬性要求；仅供调试联调，非生产密钥。`scripts/gen-debug-signing.py` 只在证书缺失时兜底生成，已存在的不会覆盖。
 - 小米官方手机端 SDK（`xms-wearable-lib_1.4_release.aar`）**不随仓库分发**，没有它手机端无法编译：请按 [docs/sdk-provenance.md](docs/sdk-provenance.md) 从小米官方示例包里取出这个文件，放进 `app/libs/`，再用 `python scripts/check-aar-hash.py` 校验哈希（来源、大小、哈希都写在那份文档里）。
 
 ### 手环端（Vela 快应用 RPK）
@@ -155,7 +155,7 @@ cd .. && node scripts/build-rpk.js
 ### 测试
 
 ```bash
-./gradlew :app:testDebugUnitTest                   # 手机端单测，49 项
+./gradlew :app:testDebugUnitTest                   # 手机端单测，50 项
 cd band-app && npm install                         # 先装依赖
 cd .. && node --test band-app/test/startup.test.js band-app/test/session.test.js band-app/test/codec.test.js
 ```

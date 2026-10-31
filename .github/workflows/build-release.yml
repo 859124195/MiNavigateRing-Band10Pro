@@ -5,10 +5,10 @@
 # 作用：把“本地必须装 Android SDK”的那一步搬到云端，
 #       你不用在自己电脑装 SDK，直接从 Release 下载两个文件装即可。
 #
-# ⚠️ 证书说明：APK 与 RPK 在同一个 CI run 内用【同一份临时证书】签名
-#   （满足小米 interconnect “同包名同证书” 要求）。调试证书（app/signing/ 下的
-#    debug.jks + 配套 PEM）已固化进仓库，APK 与 RPK 无论本地/CI、哪次构建都用同一把证书，
-#    但仍建议从同一次 Release 成对下载安装，避免混用旧包。
+# ⚠️ 证书说明：调试证书（app/signing/ 下的 debug.jks + 配套 PEM）已固化进仓库，
+#   APK 与 RPK 无论本地/CI、哪次构建都用同一把证书（满足小米 interconnect
+#   “同包名同证书” 要求）；preBuild 发现证书已存在会跳过生成，不会每次重签。
+#   仍建议从同一次 Release 成对下载安装，避免混用历史旧包。
 
 name: Build & Release (Band 10 PRO)
 

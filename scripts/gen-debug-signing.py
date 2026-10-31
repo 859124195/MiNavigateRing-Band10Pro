@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Generate the local debug signing material for the probe app.
 
-Nothing generated here is version controlled. The key is local-only and its password
-lives in ``app/signing/signing.local.properties`` (gitignored). Existing material is
-left untouched so repeated builds stay reproducible.
+The material under ``app/signing/`` (keystore, PEM pair and the password file)
+is committed to the repository on purpose: the phone APK and the band RPK must
+share one certificate for Xiaomi interconnect to accept them, so a per-machine
+key would break the pairing. This script only fills the material in when it is
+missing; existing files are left untouched so repeated builds stay reproducible.
 """
 
 from __future__ import annotations
