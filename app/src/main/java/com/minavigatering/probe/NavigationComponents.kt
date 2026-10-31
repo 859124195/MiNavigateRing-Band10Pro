@@ -45,7 +45,8 @@ data class NavigationStatus(val enabled: Boolean, val running: Boolean, val node
 data class NavigationChecklist(val access: Boolean, val batteryExempt: Boolean, val restoreFailed: Boolean)
 /** [NavigationContent] 的回调；Android 目标由后续工单接线。 */
 data class NavigationContentActions(
-    val onMode: (String) -> Unit, val onMain: () -> Unit, val onDiagnostics: () -> Unit, val settings: NavigationSettingActions,
+    val onMode: (String) -> Unit, val onMain: () -> Unit, val onDiagnostics: () -> Unit,
+    val onGrantDeviceManager: () -> Unit, val settings: NavigationSettingActions,
 )
 /** 清单行与权限阶段主按钮背后的设置目标。 */
 data class NavigationSettingActions(
@@ -67,6 +68,9 @@ fun NavigationContent(state: NavigationContentState, actions: NavigationContentA
         verticalArrangement = Arrangement.spacedBy(NavigationTheme.Dimens.blockGap),
     ) {
         TitleHeader(state.ui.modeLabel)
+        if (state.ui.deviceManagerPermissionGranted == false) {
+            PermissionBanner(actions.onGrantDeviceManager)
+        }
         hero()
         StatusCard(state.ui, state.status)
         if (checklistVisible(state.ui.phase)) SettingsCard(state.settings, actions.settings)
@@ -214,6 +218,49 @@ private fun FooterLink(onDiagnostics: () -> Unit) {
             Text("连接诊断与测试", color = NavigationTheme.Colors.primary, fontSize = NavigationTheme.TextSize.body)
             Spacer(Modifier.size(smallGap))
             Text("→", color = NavigationTheme.Colors.primary, fontSize = NavigationTheme.TextSize.body)
+        }
+    }
+}
+/**
+ * Prominent banner shown when the SDK device-manager permission is missing.
+ *
+ * Without it the phone cannot send anything to the band, so the band stays black — the exact
+ * failure the user hit. The banner is deliberately loud (warning background, primary action) so
+ * the gap is never silent again (work order W-746).
+ */
+@Composable
+private fun PermissionBanner(onGrant: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(NavigationTheme.Dimens.cardCorner),
+        colors = CardDefaults.cardColors(containerColor = NavigationTheme.Colors.warning),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(NavigationTheme.Dimens.heroPadding),
+            verticalArrangement = Arrangement.spacedBy(NavigationTheme.Dimens.heroGap),
+        ) {
+            Text(
+                "设备管理权限未授予",
+                color = NavigationTheme.Colors.textPrimary,
+                fontSize = NavigationTheme.TextSize.body,
+                fontWeight = FontWeight.Medium,
+            )
+            Text(
+                "手环收不到导航数据，会一直黑屏。授予后本应用会自动拉起手环导航页。",
+                color = NavigationTheme.Colors.textPrimary,
+                fontSize = NavigationTheme.TextSize.caption,
+            )
+            val colors = ButtonDefaults.buttonColors(
+                containerColor = NavigationTheme.Colors.primary, contentColor = NavigationTheme.Colors.onPrimary,
+            )
+            Button(
+                onClick = onGrant,
+                modifier = Modifier.fillMaxWidth().heightIn(min = NavigationTheme.Dimens.touchTarget),
+                colors = colors,
+            ) {
+                Text("授予权限", color = NavigationTheme.Colors.onPrimary, fontSize = NavigationTheme.TextSize.body)
+            }
         }
     }
 }

@@ -36,6 +36,7 @@ import com.minavigatering.probe.protocol.StateMessage
 import com.minavigatering.probe.transport.ProbeActions
 import com.minavigatering.probe.transport.ProbeForegroundService
 import com.minavigatering.probe.transport.ProbeRuntime
+import com.minavigatering.probe.transport.WearAutoLaunch
 import com.minavigatering.probe.transport.XiaomiWearableTransport
 import kotlinx.coroutines.delay
 
@@ -76,7 +77,7 @@ fun NavigationScreen(transport: XiaomiWearableTransport) {
     val ui = navigationUiModel(state, prefs)
     NavigationContent(
         state = contentState(ui, state),
-        actions = contentActions(context, prefs, state, launchOrStart),
+        actions = contentActions(context, prefs, state, launchOrStart, transport),
     ) { NavigationHeroCard(ui) }
 }
 
@@ -93,10 +94,18 @@ private fun contentActions(
     prefs: NavigationSettings,
     state: NavigationScreenState,
     launchOrStart: (() -> Unit) -> Unit,
+    transport: XiaomiWearableTransport,
 ) = NavigationContentActions(
     onMode = { value -> selectMode(context, prefs, state, value) },
     onMain = { toggleBridge(context, prefs, state, launchOrStart) },
     onDiagnostics = { state.debug = true },
+    onGrantDeviceManager = {
+        transport.requestDeviceManagerPermission { granted, _ ->
+            state.deviceManagerGranted = granted
+            // 授权后立即重试拉起手环导航页，省去用户手动打开（W-746）。
+            if (granted) WearAutoLaunch.onNavigationStarted(context) {}
+        }
+    },
     settings = navigationSettingActions(context),
 )
 
@@ -141,6 +150,13 @@ private class NavigationScreenState(prefs: NavigationSettings, transport: Xiaomi
     // loop. Deliberately not read from the message payload link field.
     var nodePresent by mutableStateOf(transport.currentNodeId != null)
 
+    // SDK device-manager permission state (null = not yet probed). Drives the banner and the
+    // auto-launch retry after the user grants it.
+    var deviceManagerGranted by mutableStateOf<Boolean?>(null)
+
+    // Throttle for the permission probe so it never spams the persistent log (W-746).
+    var lastPermissionCheckMs by mutableStateOf(0L)
+
     // Milliseconds the notification listener has been continuously unconnected (0 when
     // connected). Distinguishes a granted access permission from an actual live listener binding.
     var listenerDownMs by mutableStateOf(0L)
@@ -167,6 +183,7 @@ private fun navigationUiModel(state: NavigationScreenState, prefs: NavigationSet
     listenerDownMs = state.listenerDownMs,
     amapNavigationPresent = ProbeRuntime.wakePolicy.amapNavigationPresent,
     autoLaunchBand = prefs.autoLaunchBand,
+    deviceManagerPermissionGranted = state.deviceManagerGranted,
 )
 
 /**
@@ -212,7 +229,18 @@ private suspend fun pollNavigationState(
             ComponentName(context, AmapNotificationService::class.java)
         )
         state.latest = ProbeRuntime.session.latestState
+        val now = System.currentTimeMillis()
         state.nodePresent = transport.currentNodeId != null
+        // 手环在线时按 5 秒节流探测设备管理权限；离线则清空，避免横幅误报（W-746）。
+        if (state.nodePresent) {
+            if (state.deviceManagerGranted != true && now - state.lastPermissionCheckMs > 5000) {
+                state.lastPermissionCheckMs = now
+                transport.checkDeviceManagerPermission { granted, _ -> state.deviceManagerGranted = granted }
+            }
+        } else {
+            state.deviceManagerGranted = null
+            state.lastPermissionCheckMs = 0L
+        }
         state.batteryExempt = isIgnoringBatteryOptimizations(context)
         state.restoreFailed = prefs.lastRestoreText.startsWith("failed")
         updateListenerWindow(state)

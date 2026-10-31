@@ -41,6 +41,7 @@ import com.minavigatering.probe.logging.LogStore
 import com.minavigatering.probe.transport.ProbeRuntime
 import com.minavigatering.probe.transport.SendPhase
 import com.minavigatering.probe.transport.SendResult
+import com.minavigatering.probe.transport.WearAutoLaunch
 import com.minavigatering.probe.transport.XiaomiWearableTransport
 
 /**
@@ -263,8 +264,9 @@ fun ProbeScreen(transport: XiaomiWearableTransport) {
         Text("最近 SDK 错误：$sdkErrorText", style = MaterialTheme.typography.bodySmall)
         Button(onClick = { runChannelDiagnostics() }) { Text("刷新通道诊断") }
         Button(onClick = {
-            transport.requestDeviceManagerPermission { _, _ ->
+            transport.requestDeviceManagerPermission { granted, _ ->
                 runOnUiThreadCompat { refreshDiagnostics() }
+                if (granted) WearAutoLaunch.onNavigationStarted(context) {}
             }
         }) { Text("请求设备管理权限") }
 

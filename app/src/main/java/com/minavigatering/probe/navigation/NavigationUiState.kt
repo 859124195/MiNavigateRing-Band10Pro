@@ -44,6 +44,11 @@ data class NavigationUiModel(
      */
     val bridgeLine: String,
     val bandLine: String?,
+    /**
+     * SDK 设备管理权限是否已授予（手环实际收发所必需的权限）。null 表示尚未探测。
+     * 决定主界面是否弹「权限未授予」横幅（W-746）。
+     */
+    val deviceManagerPermissionGranted: Boolean? = null,
 )
 
 /** The 14 confirmed Chinese action labels, see design/NAVIGATION_ICONS.md. */
@@ -128,6 +133,8 @@ fun mapNavigationUi(
     amapNavigationPresent: Boolean = false,
     /** Home switch: whether starting navigation also launches the band navigation page. */
     autoLaunchBand: Boolean = false,
+    /** SDK device-manager permission state; null when not yet probed. Drives the permission banner. */
+    deviceManagerPermissionGranted: Boolean? = null,
 ): NavigationUiModel {
     val modeLabel = if (selectedMode == NavProtocol.MODE_CYCLE) "骑行" else "步行"
 
@@ -141,6 +148,7 @@ fun mapNavigationUi(
     val bandLine = when {
         !bridgeEnabled || !sessionRunning -> null
         !bandNodePresent -> "手环：未发现，正在连接"
+        deviceManagerPermissionGranted == false -> "手环：设备管理权限未授予"
         else -> "手环：已发现，尚未确认收到"
     }
 
@@ -186,6 +194,7 @@ fun mapNavigationUi(
             showAsValidInstruction = false,
             bridgeLine = bridgeLine,
             bandLine = bandLine,
+            deviceManagerPermissionGranted = deviceManagerPermissionGranted,
         )
     }
 
@@ -221,5 +230,6 @@ fun mapNavigationUi(
         showAsValidInstruction = true,
         bridgeLine = bridgeLine,
         bandLine = bandLine,
+        deviceManagerPermissionGranted = deviceManagerPermissionGranted,
     )
 }
